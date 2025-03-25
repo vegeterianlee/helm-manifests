@@ -1,47 +1,52 @@
 logging {
-        level  = "info"
-        format = "logfmt"
-      }
+  level  = "info"
+  format = "logfmt"
+  write_to = [loki.write.default.receiver]
+}
 
-loki {
-    # 위치 파일 저장 디렉토리 (파일 오프셋 저장)
-    positions_directory = "/tmp/positions"
-
-    # Loki 서버로 로그를 전송하기 위한 클라이언트 설정 (예시로 Loki 서비스가 loki:3100 에 있다고 가정)
-    configs {
-      name = "alloy"
-      clients = [{
-        url = "http://loki:3100/loki/api/v1/push"
-      }]
-
-      scrape_configs = [
-        {
-          job_name = "safe-check-dev-logs"
-          static_configs = [
-            {
-              targets = ["localhost"],
-              labels = {
-                app         = "safe-check-deploy-dev",
-                environment = "dev"
-              },
-              # 로그 파일 경로 패턴: safe-check-deploy-dev 관련 로그 파일을 찾음
-              __path__ = "/var/log/containers/*safe-check-deploy-dev*.log"
-            }
-          ]
-        },
-        {
-          job_name = "prod-deploy-logs"
-          static_configs = [
-            {
-              targets = ["localhost"],
-              labels = {
-                app = "prod-deploy"
-              },
-              # 로그 파일 경로 패턴: prod-deploy 관련 로그 파일을 찾음
-              __path__ = "/var/log/containers/*prod-deploy*.log"
-            }
-          ]
-        }
-      ]
+loki.source.podlogs "dev_logs" {
+  selector {
+    match_labels = {
+      app = "safe-check-deploy-dev"
     }
+  }
+  forward_to = [loki.process.dev_logs.receiver]
+}
+
+loki.process "dev_logs" {
+  stage.decolorize {}
+  stage.docker {}
+  stage.label_keep {
+    values = [ "kubernetes_pod_name", "kubernetes_pod_container_name" ]
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.source.podlogs "prod_logs" {
+  selector {
+    match_labels = {
+      app = "prod-deploy"
+    }
+  }
+  forward_to = [loki.process.prod_logs.receiver]
+}
+
+loki.process "prod_logs" {
+  stage.decolorize {}
+  stage.docker {}
+  stage.label_keep {
+    values = [ "kubernetes_pod_name", "kubernetes_pod_container_name", "kubernetes_deployment_name" ]
+  }
+  stage.labels {
+    values = {
+      environment = "prod"
+    }
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki-dev.logging-dev.svc.cluster.local:3100/loki/api/v1/push"
+  }
 }
