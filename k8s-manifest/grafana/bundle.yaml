@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-deploy
+  namespace: logging-dev
+  labels:
+    app: grafana-oss
+    environment: prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-oss
+  template:
+    metadata:
+      labels:
+        app: grafana-oss
+        environment: prod
+    spec:
+      containers:
+      - name: grafana-oss
+        image: grafana/grafana:latest
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http-grafana
+          containerPort: 3000
+          protocol: TCP
+
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /robots.txt
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 2
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          tcpSocket:
+            port: 3000
+          timeoutSeconds: 1
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 400Mi
+
+#        volumeMounts:
+#        - name: grafana-datasources
+#          mountPath: /etc/grafana/provisioning/datasources
+#      volumes:
+#      - name: grafana-datasources
+#        configMap:
+#          name: grafana-datasources
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-type
+                    operator: In
+                    values:
+                      - prod
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-svc
+  namespace: logging-dev
+  labels:
+    app: grafana-oss
+spec:
+  ports:
+  - port: 4000
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: grafana-oss

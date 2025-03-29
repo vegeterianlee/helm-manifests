@@ -37,54 +37,78 @@ alloy:
       logging {
         level  = "info"
         format = "logfmt"
-        write_to = [loki.write.default.receiver]
       }
-      
-      loki.source.podlogs "dev_logs" {
-        selector {
-          match_labels = {
-            app = "safe-check-deploy-dev",
+
+      discovery.kubernetes "kubernetes_pods" {
+              role = "pod"
+      }
+
+      discovery.relabel "kubernetes_pods" {
+              targets = discovery.kubernetes.kubernetes_pods.targets
+
+              rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app"]
+                  regex         = "safe-check-deploy-dev"
+                  action        = "keep"
+              }
+              
+              rule {
+                      source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name", "__meta_kubernetes_pod_label_app", "__tmp_controller_name", "__meta_kubernetes_pod_name"]
+                      regex         = "^;*([^;]+)(;.*)?$"
+                      target_label  = "app"
+              }
+
+              rule {
+                      source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_instance", "__meta_kubernetes_pod_label_instance"]
+                      regex         = "^;*([^;]+)(;.*)?$"
+                      target_label  = "instance"
+              }
+
+              rule {
+                      source_labels = ["__meta_kubernetes_pod_node_name"]
+                      target_label  = "node_name"
+              }
+
+              rule {
+                      source_labels = ["__meta_kubernetes_namespace"]
+                      target_label  = "namespace"
+              }
+
+              rule {
+                      source_labels = ["__meta_kubernetes_pod_name"]
+                      target_label  = "pod"
+              }
+
+              rule {
+                      source_labels = ["__meta_kubernetes_pod_container_name"]
+                      target_label  = "container"
+              }
+
+              rule {
+                      source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+                      separator     = "/"
+                      target_label  = "__path__"
+                      replacement   = "/var/log/pods/*$1/*.log"
+              }
+
+      }
+
+      local.file_match "kubernetes_pods" {
+              path_targets = discovery.relabel.kubernetes_pods.output
+      }
+      loki.source.kubernetes "kubernetes_pods" {
+          targets    = discovery.relabel.kubernetes_pods.output
+          forward_to = [loki.process.process.receiver]
+      }
+
+      loki.process "process" {
+          forward_to = [loki.write.loki.receiver]
+      }
+
+      loki.write "loki" {
+          endpoint {
+              url = "http://loki-stack-dev.logging-dev.svc.cluster.local:3100/loki/api/v1/push"
           }
-        }
-        forward_to = [loki.process.dev_logs.receiver]
-      }
-    
-      loki.process "dev_logs" {
-        stage.decolorize {}
-        stage.docker {}
-        stage.label_keep {
-            values = [ "kubernetes_pod_name", "kubernetes_pod_container_name"]
-        }
-        forward_to = [loki.write.default.receiver]
-      }
-      
-      loki.source.podlogs "prod_logs" {
-        selector {
-          match_labels = {
-            app = "prod-deploy",
-          }
-        }
-        forward_to = [loki.process.prod_logs.receiver]
-      }
-      
-      loki.process "prod_logs" {
-        stage.decolorize {}
-        stage.docker {}
-        stage.label_keep {
-            values = [ "kubernetes_pod_name", "kubernetes_pod_container_name", "kubernetes_deployment_name"]
-        }
-        stage.labels {
-            values = {
-              environment  = "prod",         
-            }
-        }
-        forward_to = [loki.write.default.receiver]
-      }
-      
-      loki.write "default" {
-        endpoint {
-          url = "http://loki-dev.logging-dev.svc.cluster.local:3100/loki/api/v1/push"
-        }
       }
 
     # -- Name of existing ConfigMap to use. Used when create is false.

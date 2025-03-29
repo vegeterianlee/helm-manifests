@@ -1,52 +1,64 @@
 logging {
-  level  = "info"
-  format = "logfmt"
-  write_to = [loki.write.default.receiver]
-}
+        level  = "info"
+        format = "logfmt"
+        write_to = [loki.write.dev.receiver, loki.write.prod.receiver]
+      }
 
-loki.source.podlogs "dev_logs" {
-  selector {
-    match_labels = {
-      app = "safe-check-deploy-dev"
-    }
-  }
-  forward_to = [loki.process.dev_logs.receiver]
-}
+      loki.source.podlogs "dev_logs" {
+        selector {
+          match_labels = {
+            app = "safe-check-deploy-dev",
+          }
+        }
+        forward_to = [loki.process.dev_logs.receiver]
+      }
 
-loki.process "dev_logs" {
-  stage.decolorize {}
-  stage.docker {}
-  stage.label_keep {
-    values = [ "kubernetes_pod_name", "kubernetes_pod_container_name" ]
-  }
-  forward_to = [loki.write.default.receiver]
-}
+      loki.process "dev_logs" {
+        stage.decolorize {}
+        stage.docker {}
+        stage.label_keep {
+            values = [ "kubernetes_pod_name", "kubernetes_pod_container_name"]
+        }
+        forward_to = [loki.write.dev.receiver]
+      }
 
-loki.source.podlogs "prod_logs" {
-  selector {
-    match_labels = {
-      app = "prod-deploy"
-    }
-  }
-  forward_to = [loki.process.prod_logs.receiver]
-}
+      loki.source.podlogs "prod_logs" {
+        selector {
+          match_labels = {
+            app = "prod-deploy",
+          }
+        }
+        forward_to = [loki.process.prod_logs.receiver]
+      }
 
-loki.process "prod_logs" {
-  stage.decolorize {}
-  stage.docker {}
-  stage.label_keep {
-    values = [ "kubernetes_pod_name", "kubernetes_pod_container_name", "kubernetes_deployment_name" ]
-  }
-  stage.labels {
-    values = {
-      environment = "prod"
-    }
-  }
-  forward_to = [loki.write.default.receiver]
-}
+      loki.process "prod_logs" {
+        stage.decolorize {}
+        stage.docker {}
+        stage.label_keep {
+            values = [ "kubernetes_pod_name", "kubernetes_pod_container_name", "kubernetes_deployment_name"]
+        }
+        stage.labels {
+            values = {
+              environment  = "prod",
+            }
+        }
+        forward_to = [loki.write.prod.receiver]
+      }
 
-loki.write "default" {
-  endpoint {
-    url = "http://loki-dev.logging-dev.svc.cluster.local:3100/loki/api/v1/push"
-  }
-}
+      loki.write "dev" {
+        endpoint {
+          url = "http://loki-dev.logging-dev.svc.cluster.local:3100/loki/api/v1/push"
+          headers = {
+            "X-Scope-OrgID" = "dev-org-id",
+          }
+        }
+      }
+
+      loki.write "prod" {
+        endpoint {
+          url = "http://loki-dev.logging-dev.svc.cluster.local:3100/loki/api/v1/push"
+          headers = {
+            "X-Scope-OrgID" = "prod-org-id",
+          }
+        }
+      }

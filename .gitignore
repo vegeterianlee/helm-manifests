@@ -1,3 +1,6 @@
 **.idea**
 .DS_Store
 ./k8s/grafana/loki/check-service-account.json
+
+# 애플리케이션 deploy 파일
+./k8s-manifest/recommendation/**

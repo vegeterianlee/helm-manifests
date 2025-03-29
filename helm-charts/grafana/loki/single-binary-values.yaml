@@ -33,15 +33,15 @@ singleBinary:
   replicas: 1
   resources:
     limits:
-      cpu: 800m
-      memory: 1024Mi
+      cpu: 1000m
+      memory: 1500Mi
     requests:
-      cpu: 200m
-      memory: 200Mi
+      cpu: 400m
+      memory: 500Mi
   extraEnv:
     # Keep a little bit lower than memory limits
     - name: GOMEMLIMIT
-      value: 1750MiB
+      value: 1250MiB
 
 chunksCache:
   # default is 500MB, with limited memory keep this smaller
